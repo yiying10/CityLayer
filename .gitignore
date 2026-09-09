@@ -1,4 +1,5 @@
 /data/*
 !/data/README.md
 /outputs/
-/third_party/
+/third_party/*
+!/third_party/.gitkeep
