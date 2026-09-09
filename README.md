@@ -1,6 +1,8 @@
-# Citylayer
+# CityLayer: Immersive Street Roaming via Layered 3D Gaussian Splatting
 
 Build layered 3D Gaussian Splatting scenes from a pair of 360° street panoramas.
+
+![Citylayer pipeline: depth-guided layering and per-layer inpainting to build layered 3DGS models (Model Synthesis), then feature matching, similarity-transform estimation, trajectory planning, and scene fusion to connect two scenes (Scene Interconnection).](assets/pipeline.png)
 
 ## Data
 
