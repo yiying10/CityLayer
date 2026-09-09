@@ -50,3 +50,11 @@ bash scripts/run_transition.sh demo
 ```
 
 Optional files in `data/<scene_name>/`: `gps.json`, `mask_a.png`, `mask_b.png`. See [`data/README.md`](data/README.md).
+
+## Results
+
+Input panoramas vs. novel-view renders from the reconstructed 3DGS scenes:
+
+<p align="center">
+  <img src="assets/compare.png" width="520" alt="Original panorama vs rendered 3DGS model">
+</p>
