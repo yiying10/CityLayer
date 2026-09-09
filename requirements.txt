@@ -1,0 +1,18 @@
+# CityLayer (alignment + transition in src/)
+# Install a CUDA PyTorch build first, matching LayerPano3D, e.g.:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# LayerPano3D itself: follow third_party/LayerPano3D/requirements.txt
+# (or the upstream LayerPano3D README). Do not install that stack from here.
+
+numpy>=1.24,<2.0
+opencv-python>=4.8
+Pillow>=10.0
+plyfile>=1.0
+scipy>=1.10
+tqdm>=4.65
+kornia>=0.7
+lightglue @ git+https://github.com/cvg/LightGlue.git
+
+# Optional: used if present in render_transition_hq.py
+lpips>=0.1.4
