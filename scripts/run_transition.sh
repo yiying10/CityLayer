@@ -89,7 +89,7 @@ if [[ ! -d "${LAYERPANO_DIR}" ]]; then
     exit 1
 fi
 
-for py in step1_2_pipeline.py step3_4_pipeline.py step5_align_model.py build_trajectory.py render_transition_hq.py; do
+for py in panorama_to_patches.py feature_matching.py depth_unprojection.py similarity_alignment.py transform_model.py build_trajectory.py render_transition_hq.py; do
     if [[ ! -f "${SRC_DIR}/${py}" ]]; then
         echo "Missing: ${SRC_DIR}/${py}"
         exit 1
@@ -133,51 +133,71 @@ mkdir -p "${OUT_DIR}"
 export OUT_DIR LAYERPANO_DIR
 export PYTHONPATH="${LAYERPANO_DIR}:${SRC_DIR}:${PYTHONPATH:-}"
 
-STEP12_OUT="${OUT_DIR}/step12"
-STEP34_OUT="${OUT_DIR}/step34"
+STEP1_OUT="${OUT_DIR}/step1"
+STEP2_OUT="${OUT_DIR}/step2"
+STEP3_OUT="${OUT_DIR}/step3"
+STEP4_OUT="${OUT_DIR}/step4"
 STEP5_OUT="${OUT_DIR}/step5"
 
 echo "============================================================"
-echo "[Step 1-2] Panorama matching"
+echo "[Step 1] Panorama -> patches"
 echo "  scene: ${SCENE_NAME}"
 echo "  out:   ${OUT_DIR}"
 echo "============================================================"
-STEP12_CMD=(
-    python3 "${SRC_DIR}/step1_2_pipeline.py"
+STEP1_CMD=(
+    python3 "${SRC_DIR}/panorama_to_patches.py"
     --panoA "${PANO_A}" --panoB "${PANO_B}"
-    --out-dir "${STEP12_OUT}"
-    --matcher "${MATCHER}"
+    --out-dir "${STEP1_OUT}"
     --fov "${FOV}" --res "${RES}"
     --yaws "${YAWS[@]}"
-    --lightglue-thresh "${LIGHTGLUE_THRESH}"
-    --reproj-thresh "${REPROJ_THRESH}"
-    --min-inliers "${MIN_INLIERS}"
 )
-[[ -n "${MASK_A}" ]] && STEP12_CMD+=(--maskA "${MASK_A}")
-[[ -n "${MASK_B}" ]] && STEP12_CMD+=(--maskB "${MASK_B}")
-"${STEP12_CMD[@]}"
+[[ -n "${MASK_A}" ]] && STEP1_CMD+=(--maskA "${MASK_A}")
+[[ -n "${MASK_B}" ]] && STEP1_CMD+=(--maskB "${MASK_B}")
+"${STEP1_CMD[@]}"
 
 echo ""
 echo "============================================================"
-echo "[Step 3-4] Depth unprojection + RANSAC + Umeyama"
+echo "[Step 2] Panorama matching"
 echo "============================================================"
-python3 "${SRC_DIR}/step3_4_pipeline.py" \
-    --matches    "${STEP12_OUT}/filtered_matches.json" \
-    --depthA     "${DEPTH_A}" --depthB "${DEPTH_B}" \
-    --out-dir    "${STEP34_OUT}" \
-    --iterations "${RANSAC_ITERATIONS}" \
-    --threshold  "${RANSAC_THRESHOLD}" \
-    --panoA      "${PANO_A}" --panoB "${PANO_B}"
+python3 "${SRC_DIR}/feature_matching.py" \
+    --manifest "${STEP1_OUT}/patch_manifest.json" \
+    --out-dir  "${STEP2_OUT}" \
+    --matcher  "${MATCHER}" \
+    --lightglue-thresh "${LIGHTGLUE_THRESH}" \
+    --reproj-thresh    "${REPROJ_THRESH}" \
+    --min-inliers      "${MIN_INLIERS}"
+
+echo ""
+echo "============================================================"
+echo "[Step 3] Depth unprojection"
+echo "============================================================"
+python3 "${SRC_DIR}/depth_unprojection.py" \
+    --matches "${STEP2_OUT}/filtered_matches.json" \
+    --depthA  "${DEPTH_A}" --depthB "${DEPTH_B}" \
+    --out-dir "${STEP3_OUT}" \
+    --panoA   "${PANO_A}" --panoB "${PANO_B}"
+
+echo ""
+echo "============================================================"
+echo "[Step 4] RANSAC + Umeyama similarity alignment"
+echo "============================================================"
+python3 "${SRC_DIR}/similarity_alignment.py" \
+    --point-pairs "${STEP3_OUT}/point_pairs.npy" \
+    --matches     "${STEP3_OUT}/step3_filtered_matches.json" \
+    --out-dir     "${STEP4_OUT}" \
+    --iterations  "${RANSAC_ITERATIONS}" \
+    --threshold   "${RANSAC_THRESHOLD}" \
+    --panoA       "${PANO_A}" --panoB "${PANO_B}"
 
 echo ""
 echo "============================================================"
 echo "[Step 5] Apply transform to model_B"
 echo "============================================================"
-python3 "${SRC_DIR}/step5_align_model.py" \
+python3 "${SRC_DIR}/transform_model.py" \
     --modelB    "${MODEL_B}" \
     --out       "${STEP5_OUT}/model_B_aligned.ply" \
     --out-dir   "${STEP5_OUT}" \
-    --transform "${STEP34_OUT}/transform.json"
+    --transform "${STEP4_OUT}/transform.json"
 
 echo ""
 echo "============================================================"
@@ -187,7 +207,7 @@ python3 - <<'PY'
 import json, os, numpy as np
 from pathlib import Path
 base = Path(os.environ["OUT_DIR"])
-with open(base / "step34" / "transform.json") as f:
+with open(base / "step4" / "transform.json") as f:
     t = json.load(f)
 R   = np.asarray(t["R"], dtype=np.float64)
 vec = np.asarray(t["t"], dtype=np.float64)
@@ -207,7 +227,7 @@ TRAJ_CMD=(
     python3 "${SRC_DIR}/build_trajectory.py"
     --model_A       "${MODEL_A}"
     --model_B       "${STEP5_OUT}/model_B_aligned.ply"
-    --stats_csv     "${STEP12_OUT}/match_pair_stats.csv"
+    --stats_csv     "${STEP2_OUT}/match_pair_stats.csv"
     --output        "${OUT_DIR}/trajectory.json"
     --A_frames      "${FRAMES}"
     --B_frames      "${B_FRAMES}"
@@ -235,7 +255,7 @@ python3 "${SRC_DIR}/render_transition_hq.py" \
     --width               "${TRANSITION_WIDTH}" \
     --height              "${TRANSITION_HEIGHT}" \
     --fps                 "${FPS}" \
-    --transform           "${STEP34_OUT}/transform.json" \
+    --transform           "${STEP4_OUT}/transform.json" \
     --transition_duration "${TRANSITION_DURATION}" \
     --B_frames            "${B_FRAMES}" \
     --fov-deg             90 \
